@@ -2,7 +2,7 @@
  "cells": [
   {
    "cell_type": "code",
-   "execution_count": 5,
+   "execution_count": 1,
    "id": "486e2557-613a-488a-9618-2a86dd6d1c25",
    "metadata": {},
    "outputs": [],
@@ -20,7 +20,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 6,
+   "execution_count": 2,
    "id": "ff57d031-6890-455c-93cb-5479c52ecccd",
    "metadata": {},
    "outputs": [],
@@ -36,7 +36,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 40,
+   "execution_count": 3,
    "id": "6ea2339a-8616-4218-8dd6-fb9993f3a191",
    "metadata": {},
    "outputs": [],
@@ -50,7 +50,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 41,
+   "execution_count": 5,
    "id": "f7b013ff-d7f4-4101-89ad-f673efa77845",
    "metadata": {},
    "outputs": [],
@@ -68,7 +68,7 @@
     "    Z2 = linear(A1, W2, b2)\n",
     "    loss , A2 = softmax_cross_entropy(Z2, y)\n",
     "    # backward\n",
-    "    Z2.grad = (A2 - y) / X.shape[0]\n",
+    "    Z2.grad_ = (A2 - y) / X.shape[0]\n",
     "    linear_backward(A1, W2, b2, Z2)\n",
     "    relu_backward(Z1, A1)\n",
     "    linear_backward(X, W1, b1, Z1)\n",
