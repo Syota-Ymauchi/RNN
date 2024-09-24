@@ -2,6 +2,44 @@ import torch
 import torch.nn as nn
 
 # 今後、bidirectionやDeepRNNに対応出来るように改良する予定
+class MyRNN(nn.Module):
+    def __init__(self, input_size, hidden_size):
+        """
+        embedding layerを使用する時はinput_sizeにembedding dimを引数として入れる
+        """
+        
+        super().__init__()
+        self.hidden_size = hidden_size
+    
+        # 全結合層
+        self.hidden = nn.Linear(input_size+self.hidden_size, self.hidden_size) #[x: W.T] -> input dim = embedding dim + hidden dim
+       
+        # 活性化関数
+        self.tanh = nn.Tanh()
+        
+    
+    def forward(self, input, h_0=None):
+  
+        batch_size, seq_len , _ = input.size() # input : [batch_size, seq_len(embedding_dim), input_size(vocab_size)]
+
+        if h_0 is None:
+            h_0 = torch.zeros(1, batch_size, self.hidden_size)
+        else:
+            h_0 = h_0
+        
+        h = h_0.squeeze(0) # [1, batch_size, hidden_size] -> [batch_size, hidden_size]
+        
+        output = []
+        for i in range(seq_len):
+            combined = torch.cat((input[:,i,:], h), dim=1)  
+            h = self.tanh(self.hidde(combined))
+            
+            output.append(h.unsqueeze(1)) # h : [batch_size, hidden_size] -> [batch_size, 1, hidden_size]
+
+        h_n = h.unsqueeze(0) # [batch_size, hidden_size] -> [1, batch_size, hidden_size]    
+        output_seq = torch.cat(output, dim=1) # [batch_size, seq_len, hidden_size]
+
+        return output_seq, h_n
 
 class MyUGRNN(nn.Module):
     def __init__(self, input_size, hidden_size):
