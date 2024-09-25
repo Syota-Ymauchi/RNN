@@ -1,18 +1,21 @@
 import torch
 import torch.nn as nn
 
-# 今後、bidirectionやDeepRNNに対応出来るように改良する予定
+# bidirection対応に変更する
 class MyRNN(nn.Module):
-    def __init__(self, input_size, hidden_size):
+    def __init__(self, input_size, hidden_size, bidirection=False):
         """
         embedding layerを使用する時はinput_sizeにembedding dimを引数として入れる
         """
         
         super().__init__()
         self.hidden_size = hidden_size
+        self.num_direction = 2 if bidirection == True else 1
     
         # 全結合層
-        self.hidden = nn.Linear(input_size+self.hidden_size, self.hidden_size) #[x: W.T] -> input dim = embedding dim + hidden dim
+        self.hidden = nn.Linear(input_size+self.hidden_size, self.hidden_size) #[x : h] -> input dim = embedding dim + hidden dim
+        if self.num_direction == 2:
+            self.backward_hidden = nn.Linear(input_size+self.hidden_size, self.hidden_size) #[x: h] -> input dim = embedding dim + hidden dim
        
         # 活性化関数
         self.tanh = nn.Tanh()
@@ -32,27 +35,55 @@ class MyRNN(nn.Module):
         output = []
         for i in range(seq_len):
             combined = torch.cat((input[:,i,:], h), dim=1)  
-            h = self.tanh(self.hidde(combined))
+            h = self.tanh(self.hidden(combined))
             
             output.append(h.unsqueeze(1)) # h : [batch_size, hidden_size] -> [batch_size, 1, hidden_size]
+   
+        # backward   
+        if self.num_direction == 2:
+            h_backeard_0 = h_0
+            out_backward = []
+  
+            h_backward = h_backeard_0.squeeze(0)
+            for i in reversed(range(seq_len)):
+                combined = torch.cat((input[:,i,:], h_backward), dim=1)  
+                h_backward =  self.tanh(self.backward_hidden(combined))
+        
+                out_backward.append(h_backward.unsqueeze(1)) # h_backward : [batch_size, hidden_size] -> [batch_size, 1, hidden_size]
+         
+    
+            out_backward = out_backward[::-1] # [t=T, T-1, ... ,0] -> [0, 1, 2, ... , T]
+          
+            out_backward = torch.cat(out_backward, dim=1) # [batch_size, seq_len, hidden_size]
+            output = torch.cat(output, dim=1)   
+            output_seq = torch.cat((output, out_backward), dim=2) #[batch_size, seq_len, hidden_size*2]
+            h_n = torch.cat((h.unsqueeze(0), h_backward.unsqueeze(0)), dim=0) # [2, batch_size, hidden_size]
+            
+            return output_seq, h_n
 
-        h_n = h.unsqueeze(0) # [batch_size, hidden_size] -> [1, batch_size, hidden_size]    
-        output_seq = torch.cat(output, dim=1) # [batch_size, seq_len, hidden_size]
-
-        return output_seq, h_n
+        # not use bidirection
+        else:
+            h_n = h.unsqueeze(0) # [batch_size, hidden_size] -> [1, batch_size, hidden_size]    
+            output_seq = torch.cat(output, dim=1) # [batch_size, seq_len, hidden_size]
+    
+            return output_seq, h_n
 
 class MyUGRNN(nn.Module):
-    def __init__(self, input_size, hidden_size):
+    def __init__(self, input_size, hidden_size, bidirection=False):
         """
         embedding layerを使用する時はinput_sizeにembedding dimを引数として入れる
         """
         
         super().__init__()
         self.hidden_size = hidden_size
+        self.num_direction = 2 if bidirection == True else 1
+        
     
         # 全結合層
-        self.hidden_candidate = nn.Linear(input_size+self.hidden_size, self.hidden_size) #[x: W.T] -> input dim = embedding dim + hidden dim
+        self.hidden_candidate = nn.Linear(input_size+self.hidden_size, self.hidden_size) #[x: h] -> input dim = embedding dim + hidden dim
         self.update_gate = nn.Linear(input_size+self.hidden_size, self.hidden_size)
+        if self.num_direction == 2:
+            self.backward_hidden = nn.Linear(input_size+self.hidden_size, self.hidden_size) #[x: h] -> input dim = embedding dim + hidden dim
 
         # 活性化関数
         self.tanh = nn.Tanh()
@@ -76,6 +107,29 @@ class MyUGRNN(nn.Module):
             update_gate = self.sigmoid(self.update_gate(combined))
             h = update_gate * h_candidate + (1 - update_gate) * h 
             output.append(h.unsqueeze(1)) # h : [batch_size, hidden_size] -> [batch_size, 1, hidden_size]
+         # backward   
+        if self.num_direction == 2:
+            h_backeard_0 = h_0
+            out_backward = []
+  
+            h_backward = h_backeard_0.squeeze(0)
+            for i in reversed(range(seq_len)):
+                combined = torch.cat((input[:,i,:], h_backward), dim=1)  
+                h_backward =  self.tanh(self.backward_hidden(combined))
+        
+                out_backward.append(h_backward.unsqueeze(1)) # h_backward : [batch_size, hidden_size] -> [batch_size, 1, hidden_size]
+         
+    
+            out_backward = out_backward[::-1] # [t=T, T-1, ... ,0] -> [0, 1, 2, ... , T]
+          
+            out_backward = torch.cat(out_backward, dim=1) # [batch_size, seq_len, hidden_size]
+            output = torch.cat(output, dim=1)   
+            output_seq = torch.cat((output, out_backward), dim=2) #[batch_size, seq_len, hidden_size*2]
+            h_n = torch.cat((h.unsqueeze(0), h_backward.unsqueeze(0)), dim=0) # [2, batch_size, hidden_size]
+            
+            return output_seq, h_n
+
+        # not use bidirection
 
         h_n = h.unsqueeze(0) # [batch_size, hidden_size] -> [1, batch_size, hidden_size]    
         output_seq = torch.cat(output, dim=1) # [batch_size, seq_len, hidden_size]
@@ -85,18 +139,22 @@ class MyUGRNN(nn.Module):
 
 
 class MyGRU(nn.Module):
-    def __init__(self, input_size, hidden_size):
+    def __init__(self, input_size, hidden_size, bidirection=False):
         """
         embedding layerを使用する時はinput_sizeにembedding dimを引数として入れる
         """
         
         super().__init__()
         self.hidden_size = hidden_size
+        self.num_direction = 2 if bidirection == True else 1
+
     
         # 全結合層
         self.hidden_candidate = nn.Linear(input_size+self.hidden_size, self.hidden_size) #[x: W.T] -> input dim = input(embedding) dim + hidden dim
         self.update_gate = nn.Linear(input_size+self.hidden_size, self.hidden_size)
         self.reset_gate = nn.Linear(input_size+self.hidden_size, self.hidden_size)
+        if self.num_direction == 2:
+            self.backward_hidden = nn.Linear(input_size+self.hidden_size, self.hidden_size) #[x: h] -> input dim = embedding dim + hidden dim
 
 
         # 活性化関数
@@ -127,6 +185,29 @@ class MyGRU(nn.Module):
             h_candidate = self.tanh(self.hidden_candidate(combined_reset))
             h = update_gate * h_candidate + (1 - update_gate) * h 
             output.append(h.unsqueeze(1)) # h : [batch_size, hidden_size] -> [batch_size, 1, hidden_size]
+        # backward   
+        if self.num_direction == 2:
+            h_backeard_0 = h_0
+            out_backward = []
+  
+            h_backward = h_backeard_0.squeeze(0)
+            for i in reversed(range(seq_len)):
+                combined = torch.cat((input[:,i,:], h_backward), dim=1)  
+                h_backward =  self.tanh(self.backward_hidden(combined))
+        
+                out_backward.append(h_backward.unsqueeze(1)) # h_backward : [batch_size, hidden_size] -> [batch_size, 1, hidden_size]
+         
+    
+            out_backward = out_backward[::-1] # [t=T, T-1, ... ,0] -> [0, 1, 2, ... , T]
+          
+            out_backward = torch.cat(out_backward, dim=1) # [batch_size, seq_len, hidden_size]
+            output = torch.cat(output, dim=1)   
+            output_seq = torch.cat((output, out_backward), dim=2) #[batch_size, seq_len, hidden_size*2]
+            h_n = torch.cat((h.unsqueeze(0), h_backward.unsqueeze(0)), dim=0) # [2, batch_size, hidden_size]
+            
+            return output_seq, h_n
+
+        # not use bidirection
 
         h_n = h.unsqueeze(0) # [batch_size, hidden_size] -> [1, batch_size, hidden_size]    
         output_seq = torch.cat(output, dim=1) # [batch_size, seq_len, hidden_size]
@@ -137,19 +218,25 @@ class MyGRU(nn.Module):
 
 
 class MyLSTM(nn.Module):
-    def __init__(self, input_size, hidden_size):
+    def __init__(self, input_size, hidden_size, bidirection=False):
         """
         embedding layerを使用する時はinput_sizeにembedding dimを引数として入れる
         """
         
         super().__init__()
         self.hidden_size = hidden_size
+        self.num_direction = 2 if bidirection == True else 1
+
     
         # 全結合層
         self.cell_candidate = nn.Linear(input_size+self.hidden_size, self.hidden_size) #[x: W.T] -> input dim = input(embedding) dim + hidden dim
         self.update_gate = nn.Linear(input_size+self.hidden_size, self.hidden_size)
         self.forget_gate = nn.Linear(input_size+self.hidden_size, self.hidden_size)
         self.output_gate = nn.Linear(input_size+self.hidden_size, self.hidden_size)
+        if self.num_direction == 2:
+            self.backward_hidden = nn.Linear(input_size+self.hidden_size, self.hidden_size) #[x: h] -> input dim = embedding dim + hidden dim
+
+
 
 
         # 活性化関数
@@ -186,7 +273,30 @@ class MyLSTM(nn.Module):
             c = update_gate * c_candidate + forget_gate * c
             h = output_gate * self.tanh(c) # [batch_size, hidden_size]
             output.append(h.unsqueeze(1)) # [batch_size, 1, hidden_size]
-           
+        
+        # backward   
+        if self.num_direction == 2:
+            h_backeard_0 = h_0
+            out_backward = []
+  
+            h_backward = h_backeard_0.squeeze(0)
+            for i in reversed(range(seq_len)):
+                combined = torch.cat((input[:,i,:], h_backward), dim=1)  
+                h_backward =  self.tanh(self.backward_hidden(combined))
+        
+                out_backward.append(h_backward.unsqueeze(1)) # h_backward : [batch_size, hidden_size] -> [batch_size, 1, hidden_size]
+         
+    
+            out_backward = out_backward[::-1] # [t=T, T-1, ... ,0] -> [0, 1, 2, ... , T]
+          
+            out_backward = torch.cat(out_backward, dim=1) # [batch_size, seq_len, hidden_size]
+            output = torch.cat(output, dim=1)   
+            output_seq = torch.cat((output, out_backward), dim=2) #[batch_size, seq_len, hidden_size*2]
+            h_n = torch.cat((h.unsqueeze(0), h_backward.unsqueeze(0)), dim=0) # [2, batch_size, hidden_size]
+            
+            return output_seq, h_n
+
+        # not use bidirection
 
         h_n = h.unsqueeze(0) # [batch_size, hidden_size] -> [1, batch_size, hidden_size]   
         c_n = c.unsqueeze(0) # [batch_size, hidden_size] -> [1, batch_size, hidden_size]  
